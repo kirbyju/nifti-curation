@@ -1,0 +1,15 @@
+image,mask
+data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_t2.nii.gz,data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_t1Gd.nii.gz,data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_flair.nii.gz,data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_t1.nii.gz,data/TCGA-CS-4942/TCGA-CS-4942_1997.02.22_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_t1.nii.gz,data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_flair.nii.gz,data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_t2.nii.gz,data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4944/TCGA-CS-4942_1997.02.22_flair.nii.gz,data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_t1Gd.nii.gz,data/TCGA-CS-4944/TCGA-CS-4944_2001.02.08_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_t2.nii.gz,data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_t1Gd.nii.gz,data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_t1.nii.gz,data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-5393/TCGA-CS-4942_1997.02.22_t3.nii.gz,data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_GlistrBoost_ManuallyCorrected.nii.gz
+data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_flair.nii.gz,data/TCGA-CS-5393/TCGA-CS-5393_1999.06.06_GlistrBoost_ManuallyCorrected.nii.gz
