@@ -1,7 +1,12 @@
 import os
 import json
+import logging
 import pydicom
 import SimpleITK as sitk
+from concurrent.futures import ThreadPoolExecutor
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def process_dicom_series(base_folder):
     """
@@ -11,98 +16,87 @@ def process_dicom_series(base_folder):
     nifti_folder = os.path.join(base_folder, "nifti")
     os.makedirs(nifti_folder, exist_ok=True)
 
-    for root, _, files in os.walk(base_folder):
-        dicom_files = [os.path.join(root, f) for f in files if f.lower().endswith(".dcm")]
+    with ThreadPoolExecutor() as executor:
+        futures = []
+        for root, _, files in os.walk(base_folder):
+            dicom_files = [os.path.join(root, f) for f in files if f.lower().endswith(".dcm")]
+            if dicom_files:
+                futures.append(executor.submit(process_series, dicom_files, nifti_folder))
 
-        if not dicom_files:
-            continue  # Skip if no DICOM files in this folder
+        for future in futures:
+            future.result()  # Wait for all tasks to complete
 
-        # Process metadata and convert to NIfTI
-        metadata, common_metadata = extract_metadata(dicom_files)
-        if not metadata or not common_metadata:
-            print(f"Skipping directory {root}: Could not extract metadata.")
-            continue
+def process_series(dicom_files, nifti_folder):
+    """
+    Process a single DICOM series.
+    """
+    try:
+        # Extract metadata in DICOM JSON format
+        series_metadata = extract_metadata(dicom_files)
+        if not series_metadata:
+            logging.warning("Skipping series: Could not extract metadata.")
+            return
 
-        # Generate filenames based on DICOM headers
+        # Generate output filenames
         example_file = pydicom.dcmread(dicom_files[0])
-        patient_id = example_file.PatientID
-        modality = example_file.Modality
-        series_instance_uid = example_file.SeriesInstanceUID
-
-        base_filename = f"{patient_id}-{modality}-{series_instance_uid}"
+        base_filename = generate_filename(example_file)
         json_output_path = os.path.join(nifti_folder, f"{base_filename}.json")
         nifti_output_path = os.path.join(nifti_folder, f"{base_filename}.nii.gz")
 
         # Save metadata as JSON
-        save_metadata_as_json(metadata, common_metadata, json_output_path)
+        save_metadata_as_json(series_metadata, json_output_path)
 
-        # Convert series to NIfTI with SimpleITK
-        convert_to_nifti(root, nifti_output_path)
+        # Convert DICOM to NIfTI
+        convert_to_nifti(os.path.dirname(dicom_files[0]), nifti_output_path)
+    except Exception as e:
+        logging.error(f"Error processing series: {e}", exc_info=True)
 
 def extract_metadata(dicom_files):
     """
-    Extract common and unique metadata from a list of DICOM files.
+    Extract metadata from a list of DICOM files and represent it in DICOM JSON format.
     """
-    all_metadata = []
-    common_metadata = {}
-
-    # Read metadata from all files
+    series_metadata = []
     for file in dicom_files:
         ds = pydicom.dcmread(file, stop_before_pixels=True)
-        file_metadata = {
+        slice_metadata = serialize_metadata({
             elem.tag: (elem.name, elem.value)
             for elem in ds
             if not elem.tag.is_private  # Exclude private tags
-        }
-        all_metadata.append(file_metadata)
+        })
+        series_metadata.append(slice_metadata)
 
-    # Determine common metadata
-    for key in all_metadata[0]:
-        if all(file_metadata.get(key) == all_metadata[0].get(key) for file_metadata in all_metadata):
-            common_metadata[key] = all_metadata[0][key]
-
-    # Determine unique metadata
-    unique_metadata = []
-    for meta in all_metadata:
-        unique_metadata.append(
-            {key: value for key, value in meta.items() if key not in common_metadata}
-        )
-
-    # Debugging: Log identified metadata
-    print("Common Metadata:", common_metadata)
-    print("Unique Metadata Samples:", unique_metadata[:3])  # Show the first few
-
-    return unique_metadata, common_metadata
-
-def save_metadata_as_json(unique_metadata, common_metadata, output_path):
-    """
-    Save metadata as a JSON file, ensuring all values are JSON-serializable.
-    """
-    json_data = {
-        "common_metadata": serialize_metadata(common_metadata),
-        "unique_metadata": [serialize_metadata(meta) for meta in unique_metadata],
-    }
-    with open(output_path, "w") as json_file:
-        json.dump(json_data, json_file, indent=4)
+    return series_metadata
 
 def serialize_metadata(metadata):
     """
-    Recursively serialize DICOM metadata to ensure all values are JSON-serializable.
+    Serialize DICOM metadata in DICOM JSON format.
     """
-    def serialize_value(value):
-        if isinstance(value, pydicom.multival.MultiValue):
-            return [serialize_value(v) for v in value]  # Recursively handle MultiValue
-        elif isinstance(value, pydicom.sequence.Sequence):
-            return [serialize_metadata({str(el.tag): (el.name, el.value) for el in item}) for item in value]  # Handle nested sequences
-        elif isinstance(value, bytes):
-            return value.decode(errors="ignore")  # Decode bytes to string
-        elif isinstance(value, pydicom.valuerep.PersonName):
-            return str(value)  # Convert PersonName to a string
-        elif isinstance(value, (float, int, str)):
-            return value  # Keep primitive types as-is
-        return str(value)  # Fallback: convert any other type to string
+    serialized = {}
+    for key, value in metadata.items():
+        tag = format(key, "08X")  # Convert tag to 8-character hexadecimal string
+        name, val = value  # (name, value) tuple
+        vr = pydicom.datadict.dictionary_VR(key)  # Get VR from DICOM dictionary
 
-    return {str(key): (value[0], serialize_value(value[1])) for key, value in metadata.items()}
+        # Handle different value types
+        if isinstance(val, pydicom.multival.MultiValue):
+            serialized[tag] = {"vr": vr, "Value": [str(v) for v in val]}
+        elif isinstance(val, pydicom.sequence.Sequence):
+            serialized[tag] = {"vr": vr, "Value": [serialize_metadata({el.tag: (el.name, el.value) for el in item}) for item in val]}
+        elif isinstance(val, bytes):
+            serialized[tag] = {"vr": vr, "Value": val.decode(errors="ignore")}
+        elif isinstance(val, (float, int, str)):
+            serialized[tag] = {"vr": vr, "Value": val}
+        else:
+            serialized[tag] = {"vr": vr, "Value": str(val)}
+
+    return serialized
+
+def save_metadata_as_json(series_metadata, output_path):
+    """
+    Save metadata as a JSON file in DICOM JSON format.
+    """
+    with open(output_path, "w") as json_file:
+        json.dump(series_metadata, json_file, indent=4)
 
 def convert_to_nifti(dicom_dir, output_path):
     """
@@ -115,9 +109,26 @@ def convert_to_nifti(dicom_dir, output_path):
         image = reader.Execute()
 
         sitk.WriteImage(image, output_path)
-        print(f"Converted DICOM to NIfTI: {output_path}")
+        logging.info(f"Converted DICOM to NIfTI: {output_path}")
     except Exception as e:
-        print(f"Error converting DICOM to NIfTI: {e}")
+        logging.error(f"Error converting DICOM to NIfTI: {e}", exc_info=True)
+
+def generate_filename(example_file):
+    """
+    Generate a filename based on DICOM headers, with fallbacks for missing fields.
+    Sanitize the SeriesInstanceUID for use in filenames.
+    """
+    patient_id = getattr(example_file, "PatientID", "UNKNOWN_PATIENT")
+    modality = getattr(example_file, "Modality", "UNKNOWN_MODALITY")
+    series_uid = getattr(example_file, "SeriesInstanceUID", "UNKNOWN_SERIES")
+
+    # Sanitize the SeriesInstanceUID for filenames
+    sanitized_series_uid = series_uid.replace(".", "_")  # Replace periods with underscores
+
+    # Generate the filename
+    filename = f"{patient_id}-{modality}-{sanitized_series_uid}"
+    filename = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in filename)  # Further sanitization
+    return filename
 
 if __name__ == "__main__":
     base_folder = input("Enter the path to the base folder: ").strip()
